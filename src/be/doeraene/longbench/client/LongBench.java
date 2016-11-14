@@ -1,5 +1,7 @@
 package be.doeraene.longbench.client;
 
+import java.util.ArrayList;
+
 import com.google.gwt.core.client.EntryPoint;
 import com.google.gwt.event.dom.client.ClickEvent;
 import com.google.gwt.event.dom.client.ClickHandler;
@@ -560,35 +562,70 @@ public class LongBench implements EntryPoint {
       0x40L
   };
 
+  private static class MeanAndSEM {
+    public MeanAndSEM(double mean, double sem) {
+      this.mean = mean;
+      this.sem = sem;
+    }
+    public double mean;
+    public double sem;
+
+    public String toString() {
+      return mean + " us +- " + sem + " us";
+    }
+  }
+
   private static abstract class MicroBench {
 
     /** Run the benchmark the specified number of milliseconds and return
-     *  the average execution time in microseconds.
+     *  the mean execution time and SEM in microseconds.
      */
-    private double runBenchmark(long timeMinimum, int runsMinimum) {
+    private MeanAndSEM runBenchmark(long timeMinimum, int runsMinimum) {
       int runs = 0;
-      long startTime = System.currentTimeMillis();
-      long stopTime = startTime + timeMinimum;
-      long currentTime = startTime;
+      boolean enoughTime = false;
+      long stopTime = System.currentTimeMillis() + timeMinimum;
+
+      ArrayList<Double> samples = new ArrayList<Double>();
 
       do {
+        long startTime = System.currentTimeMillis();
         run();
-        runs++;
-        currentTime = System.currentTimeMillis();
-      } while (currentTime < stopTime || runs < runsMinimum);
+        long endTime = System.currentTimeMillis();
+        samples.add((endTime - startTime) * 1000.0);
+        runs += 1;
+        enoughTime = endTime >= stopTime;
+      } while (!enoughTime || runs < runsMinimum);
 
-      long elapsed = currentTime - startTime;
-      return 1000.0 * elapsed / runs;
+      return meanAndSEM(samples);
+    }
+
+    private static MeanAndSEM meanAndSEM(ArrayList<Double> samples) {
+      double n = (double) samples.size();
+      double sum = 0.0;
+      for (double sample: samples)
+        sum += sample;
+      double mean = sum / n;
+      double sem = standardErrorOfTheMean(samples, mean);
+      return new MeanAndSEM(mean, sem);
+    }
+
+    private static double standardErrorOfTheMean(ArrayList<Double> samples,
+        double mean) {
+      double n = (double) samples.size();
+      double sumSqs = 0.0;
+      for (double sample: samples)
+        sumSqs += Math.pow(sample - mean, 2);
+      return Math.sqrt(sumSqs / (n * (n - 1)));
     }
 
     private void warmUp() {
       runBenchmark(100, 2);
     }
 
-    public String report() {
+    private String report() {
       warmUp();
-      double avg = runBenchmark(2000, 5);
-      return getClass().getSimpleName() + ": " + avg + "us";
+      MeanAndSEM measures = runBenchmark(2000, 5);
+      return measures.toString();
     }
 
     public abstract void run();
