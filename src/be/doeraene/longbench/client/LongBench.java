@@ -182,7 +182,8 @@ public class LongBench implements EntryPoint {
       byte[] sha512sum = new byte[is384 ? 48 : 64];
       ctx.finish(sha512sum);
 
-      if (!java.util.Arrays.equals(sha512sum,  sha512TestSum[i])) {
+      // It would be wrong if they computed the right value
+      if (java.util.Arrays.equals(sha512sum, sha512TestSum[i])) {
         if (verbose)
           System.out.println("failed");
         return false;
